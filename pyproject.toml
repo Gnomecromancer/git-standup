@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "git-standup"
-version = "0.2.0"
+version = "0.2.1"
 description = "Show your git commits across multiple repos for your daily standup"
 readme = "README.md"
 license = "MIT"
