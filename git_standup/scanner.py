@@ -51,9 +51,13 @@ def find_repos(root: Path, max_depth: int = 3) -> list[Path]:
             return  # Don't recurse into nested git repos
         try:
             for child in path.iterdir():
-                if child.is_dir() and child.name not in skip:
+                try:
+                    is_dir = child.is_dir()
+                except OSError:
+                    continue  # socket files, inaccessible paths (e.g. Docker engine.sock)
+                if is_dir and child.name not in skip:
                     _walk(child, depth + 1)
-        except PermissionError:
+        except (PermissionError, OSError):
             pass
 
     _walk(root, 0)
