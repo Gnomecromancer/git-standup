@@ -1,6 +1,7 @@
 """CLI for git-standup."""
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -108,6 +109,14 @@ def _format_date(dt: datetime) -> str:
     "--compact", "-c", is_flag=True, default=False,
     help="Compact output — one line per commit, no repo headers.",
 )
+@click.option(
+    "--json", "output_json", is_flag=True, default=False,
+    help="Output results as JSON (machine-readable).",
+)
+@click.option(
+    "--markdown", "--md", "output_markdown", is_flag=True, default=False,
+    help="Output as Markdown — paste into Slack, Notion, or GitHub.",
+)
 @click.version_option(package_name="git-standup")
 def main(
     directory: Path,
@@ -119,6 +128,8 @@ def main(
     depth: int,
     no_color: bool,
     compact: bool,
+    output_json: bool,
+    output_markdown: bool,
 ) -> None:
     """Show your git commits across multiple repos for a daily standup.
 
@@ -129,8 +140,10 @@ def main(
       git standup ~/projects          # scan a specific directory
       git standup --all-authors       # everyone's commits
       git standup --since "last week" # custom date range
+      git standup --markdown          # Markdown digest for Slack/Notion
+      git standup --json              # machine-readable JSON
     """
-    if no_color:
+    if no_color or output_json:
         global _bold, _cyan, _yellow, _green, _dim
         _bold = _cyan = _yellow = _green = _dim = lambda s: s  # noqa: E731
 
@@ -162,6 +175,7 @@ def main(
     # Collect commits grouped by repo
     total = 0
     output_lines: list[str] = []
+    json_repos: list[dict] = []  # for --json
 
     for repo in sorted(repos, key=lambda p: p.name.lower()):
         commits = get_commits(
@@ -174,6 +188,34 @@ def main(
             continue
 
         total += len(commits)
+        branch = get_repo_current_branch(repo) or "HEAD"
+
+        if output_json:
+            json_repos.append({
+                "repo": repo.name,
+                "path": str(repo),
+                "branch": branch,
+                "commits": [
+                    {
+                        "hash": c.hash,
+                        "author": c.author,
+                        "date": c.date.isoformat(),
+                        "subject": c.subject,
+                    }
+                    for c in commits
+                ],
+            })
+            continue
+
+        if output_markdown:
+            output_lines.append(f"### {repo.name}  `{branch}`")
+            for c in commits:
+                author_tag = f" *{c.author}*" if all_authors else ""
+                output_lines.append(
+                    f"- `{c.hash}` {_format_date(c.date)} — {c.subject}{author_tag}"
+                )
+            output_lines.append("")
+            continue
 
         if compact:
             for c in commits:
@@ -185,7 +227,6 @@ def main(
                 )
                 output_lines.append(line)
         else:
-            branch = get_repo_current_branch(repo) or "HEAD"
             header = (
                 f"{_bold(_cyan(repo.name))}  "
                 f"{_dim(f'({branch})')}  "
@@ -201,13 +242,36 @@ def main(
                 )
             output_lines.append("")
 
-    if not output_lines:
-        click.echo(_dim("No commits found."))
-        return
-
-    # Summary header
     period = f"last {days} day{'s' if days != 1 else ''}" if not since else f"since {since}"
     who = "all authors" if all_authors else (author or effective_author or "you")
+
+    if output_json:
+        click.echo(json.dumps({
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "period": period,
+            "author": who,
+            "repos_scanned": len(repos),
+            "total_commits": total,
+            "repos": json_repos,
+        }, indent=2))
+        return
+
+    if not output_lines:
+        if output_markdown:
+            click.echo("*No commits found.*")
+        else:
+            click.echo(_dim("No commits found."))
+        return
+
+    if output_markdown:
+        header = f"## Standup — {period} — {who}\n"
+        click.echo(header)
+        for line in output_lines:
+            click.echo(line)
+        click.echo(f"*{total} commit{'s' if total != 1 else ''} across {len(repos)} repo{'s' if len(repos) != 1 else ''} scanned.*")
+        return
+
+    # Summary header (normal output)
     click.echo(
         _bold(f"Standup — {period} — {who}") + "\n" + "─" * 60
     )
