@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "git-standup"
+version = "0.1.0"
+description = "Show your git commits across multiple repos for your daily standup"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+keywords = ["git", "standup", "commits", "developer-tools"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+dependencies = [
+    "click>=8.0.0",
+]
+
+[project.scripts]
+git-standup = "git_standup.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Gnomecromancer/git-standup"
+Repository = "https://github.com/Gnomecromancer/git-standup"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["git_standup*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
